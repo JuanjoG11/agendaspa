@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "name": "Agenda Studio - Nail Salon",
   "short_name": "AgendaStudio",
@@ -14,4 +15,22 @@
       "purpose": "any maskable"
     }
   ]
+=======
+{
+  "name": "Agenda Studio - Nail Salon",
+  "short_name": "AgendaStudio",
+  "description": "Agenda de turnos y citas para manicura con estética Palo de Rosa.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#D4A5A5",
+  "theme_color": "#B67B7B",
+  "icons": [
+    {
+      "src": "logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+>>>>>>> 7452f18023f95f9e14a74994f3ae58f455804f63
 }
