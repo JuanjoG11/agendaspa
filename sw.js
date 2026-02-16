@@ -1,9 +1,9 @@
-const CACHE_NAME = 'coquette-spa-v1';
+const CACHE_NAME = 'coquette-spa-v2';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
-  './app.js',
+  './app-v2.js',
   './manifest.json'
 ];
 
