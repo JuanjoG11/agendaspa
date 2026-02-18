@@ -107,7 +107,13 @@ const app = {
 
         document.querySelectorAll('.nav-item').forEach(nav => {
             nav.classList.remove('active');
-            if (nav.innerText.toLowerCase().includes(view === 'calendar' ? 'agenda' : view === 'earnings' ? 'ingresos' : 'ajustes')) {
+            const navText = nav.innerText.toLowerCase();
+            if (
+                (view === 'calendar' && navText.includes('agenda')) ||
+                (view === 'earnings' && navText.includes('ingresos')) ||
+                (view === 'services' && navText.includes('servicios')) ||
+                (view === 'settings' && navText.includes('ajustes'))
+            ) {
                 nav.classList.add('active');
             }
         });
@@ -141,6 +147,9 @@ const app = {
                 break;
             case 'earnings':
                 this.renderEarnings(container);
+                break;
+            case 'services':
+                this.renderServices(container);
                 break;
             case 'settings':
                 this.renderSettings(container);
@@ -223,6 +232,16 @@ const app = {
                         </button>
                     </div>
                 ` : ''}
+                ${this.state.currentRole === 'admin' ? `
+                    <div style="margin-top: 15px; display: flex; gap: 10px;">
+                         <button class="btn btn-outline" style="padding: 8px 15px; font-size: 0.8rem;" onclick="app.showEditAppointment(${apt.id})">
+                             ✏️ Editar
+                         </button>
+                         <button class="btn btn-outline" style="padding: 8px 15px; font-size: 0.8rem; border-color: #ff5c8a; color: #ff5c8a;" onclick="app.deleteAppointment(${apt.id})">
+                             🗑️ Eliminar
+                         </button>
+                    </div>
+                ` : ''}
             </div>
         `;
 
@@ -252,31 +271,159 @@ const app = {
         `;
     },
 
-    renderEarnings(container) {
-        const totalSession = this.state.appointments
-            .filter(a => a.status === 'completed')
-            .reduce((sum, a) => sum + a.price, 0);
+    getWeekRange(dateStr) {
+        // Create date from string (e.g. "2023-10-27")
+        // We add 'T12:00:00' to avoid timezone issues shifting the day
+        const date = new Date(dateStr + 'T12:00:00');
+        const day = date.getDay(); // 0 (Sun) to 6 (Sat)
 
-        const workerGain = totalSession * 0.5;
+        // Calculate previous Sunday (Start of week)
+        const diffToSun = date.getDate() - day;
+        const start = new Date(date);
+        start.setDate(diffToSun);
+        start.setHours(0, 0, 0, 0);
+
+        // Calculate next Saturday (End of week)
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+
+        return {
+            start,
+            end,
+            id: start.toISOString().split('T')[0] // Unique ID for key
+        };
+    },
+
+    formatDateRange(start, end) {
+        const options = { day: 'numeric', month: 'short' };
+        const startStr = start.toLocaleDateString('es-ES', options);
+        const endStr = end.toLocaleDateString('es-ES', options);
+        return `${startStr} - ${endStr}`;
+    },
+
+    renderEarnings(container) {
+        const completedApts = this.state.appointments.filter(a => a.status === 'completed');
+
+        // Group by week
+        const weeks = {};
+
+        completedApts.forEach(apt => {
+            const { start, end, id } = this.getWeekRange(apt.date);
+
+            if (!weeks[id]) {
+                weeks[id] = {
+                    start,
+                    end,
+                    total: 0,
+                    appointments: []
+                };
+            }
+
+            weeks[id].total += apt.price;
+            weeks[id].appointments.push(apt);
+        });
+
+        // Convert to array and sort by date descending (newest weeks first)
+        const sortedWeeks = Object.values(weeks).sort((a, b) => b.start - a.start);
+
+        // Current week (contains today)
+        const todayStr = new Date().toISOString().split('T')[0];
+        const currentWeekId = this.getWeekRange(todayStr).id;
+
+        const currentWeekData = weeks[currentWeekId] || { total: 0 };
+        const workerGain = currentWeekData.total * 0.5;
+
+        // History (all weeks except current)
+        const historyWeeks = sortedWeeks.filter(w =>
+            w.start.toISOString().split('T')[0] !== currentWeekId
+        );
 
         container.innerHTML = `
-            <h2 style="color: var(--secondary-vibrant); margin-bottom: 25px;">Balance Real 💎</h2>
+            <h2 style="color: var(--secondary-vibrant); margin-bottom: 25px;">Tu Balance Semanal 💎</h2>
             
-            <div class="card" style="background: linear-gradient(135deg, var(--secondary-vibrant), var(--secondary)); color: white; border: none;">
-                <p style="text-transform: uppercase; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;">Ingreso Total</p>
-                <h1 style="font-size: 2.8rem; margin: 5px 0;">$${totalSession.toLocaleString()}</h1>
-                <p style="opacity: 0.9; font-size: 0.8rem;">Total recaudado por servicios realizados</p>
+            <!-- Current Week Card -->
+            <div class="card" style="background: linear-gradient(135deg, var(--secondary-vibrant), var(--secondary)); color: white; border: none; margin-bottom: 30px;">
+                <p style="text-transform: uppercase; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;">Esta Semana</p>
+                <div style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 10px;">
+                    ${this.formatDateRange(
+            this.getWeekRange(todayStr).start,
+            this.getWeekRange(todayStr).end
+        )}
+                </div>
+                
+                <h1 style="font-size: 2.8rem; margin: 5px 0;">$${currentWeekData.total.toLocaleString()}</h1>
+                <p style="opacity: 0.9; font-size: 0.8rem;">Total recaudado</p>
+                
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+                   <p style="text-transform: uppercase; font-size: 0.6rem; font-weight: 700; letter-spacing: 1px;">Tu Ganancia (50%)</p>
+                   <p style="font-size: 1.4rem; font-weight: 700;">$${workerGain.toLocaleString()}</p>
+                </div>
+            </div>
+
+            <!-- History Section -->
+            <h3 style="color: var(--secondary-vibrant); font-size: 1.1rem; margin-bottom: 15px;">Historial de Semanas</h3>
+            
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                ${historyWeeks.map(week => `
+                    <div class="card" style="padding: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h4 style="margin: 0; font-size: 1rem;">${this.formatDateRange(week.start, week.end)}</h4>
+                                <p style="font-size: 0.8rem; opacity: 0.6; margin-top: 5px;">${week.appointments.length} servicios</p>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-weight: 700; color: var(--secondary-vibrant);">$${week.total.toLocaleString()}</div>
+                                <div style="font-size: 0.7rem; opacity: 0.6;">Ganancia: $${(week.total * 0.5).toLocaleString()}</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') || `<p style="opacity: 0.5; font-size: 0.9rem; font-style: italic;">No hay historial disponible aún ✨</p>`}
+            </div>
+        `;
+    },
+
+    renderSettings(container) {
+        container.innerHTML = `
+            <div style="margin-bottom: 30px;">
+                <h2 style="color: var(--secondary-vibrant); font-size: 1.8rem;">Ajustes ⚙️</h2>
+                <p style="opacity: 0.7; font-weight: 600;">Gestiona tu cuenta</p>
             </div>
 
             <div class="card">
-                <p style="text-transform: uppercase; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; color: var(--secondary-vibrant);">Tu Ganancia (50%)</p>
-                <h2 style="font-size: 2.2rem; color: var(--text); margin: 5px 0;">$${workerGain.toLocaleString()}</h2>
-                <p style="font-size: 0.8rem; opacity: 0.7;">¡Buen trabajo! ✨</p>
+                <h3 style="margin-bottom: 15px; font-size: 1.1rem;">Cuenta</h3>
+                <p style="font-size: 0.9rem; margin-bottom: 5px;">Usuario: <b>${this.state.currentUser}</b></p>
+                <p style="font-size: 0.9rem; margin-bottom: 20px; opacity: 0.7;">Rol: ${this.state.currentRole === 'admin' ? 'Administradora' : 'Manicurista'}</p>
+                <button class="btn btn-outline" style="width: 100%; border-color: #ff5c8a; color: #ff5c8a;" onclick="app.logout()">
+                    Cerrar Sesión 🚪
+                </button>
+            </div>
+            
+            <div class="card">
+                <h3 style="margin-bottom: 10px; font-size: 1.1rem;">Depuración ✨</h3>
+                <p style="font-size: 0.8rem; opacity:0.6; margin-bottom: 15px;">Asegúrate de tener la última versión del diseño.</p>
+                <button class="btn" style="padding: 12px; font-size: 0.9rem;" onclick="location.reload(true)">
+                    🔄 Forzar Actualización
+                </button>
+            </div>
+
+            <div style="text-align: center; margin-top: 40px; opacity: 0.5;">
+                <p style="font-size: 0.8rem; font-weight: 600;">Agenda Studio v1.6 (Supabase-Stable)</p>
+                <p style="font-size: 0.7rem;">Hecho con ❤️ para tu negocio</p>
+            </div>
+        `;
+    },
+
+    renderServices(container) {
+        container.innerHTML = `
+            <div style="margin-bottom: 25px;">
+                <h2 style="color: var(--secondary-vibrant); font-size: 1.8rem;">Servicios 💅</h2>
+                <p style="opacity: 0.7; font-weight: 600;">Catálogo disponible</p>
             </div>
 
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="color: var(--secondary-vibrant); margin-bottom: 0;">Catálogo de Servicios</h3>
+                    <h3 style="color: var(--secondary-vibrant); margin-bottom: 0;">Lista de Precios</h3>
                     ${this.state.currentRole === 'admin' ? `
                         <button class="btn" style="padding: 8px 12px; font-size: 0.7rem; width: auto;" onclick="app.showAddService()">+ Nuevo</button>
                     ` : ''}
@@ -296,37 +443,6 @@ const app = {
                         ` : ''}
                     </div>
                 `).join('')}
-            </div>
-        `;
-    },
-
-    renderSettings(container) {
-        container.innerHTML = `
-            <div style="margin-bottom: 30px;">
-                <h2 style="color: var(--secondary-vibrant); font-size: 1.8rem;">Ajustes ⚙️</h2>
-                <p style="opacity: 0.7; font-weight: 600;">Gestiona tu cuenta</p>
-            </div>
-
-            <div class="card">
-                <h3 style="margin-bottom: 15px; font-size: 1.1rem;">Cuenta</h3>
-                <p style="font-size: 0.9rem; margin-bottom: 5px;">Usuario: <b>${this.state.currentUser}</b></p>
-                <p style="font-size: 0.9rem; margin-bottom: 20px; opacity: 0.7;">Rol: ${this.state.currentRole === 'admin' ? 'Administradora' : 'Trabajadora'}</p>
-                <button class="btn btn-outline" style="width: 100%; border-color: #ff5c8a; color: #ff5c8a;" onclick="app.logout()">
-                    Cerrar Sesión 🚪
-                </button>
-            </div>
-            
-            <div class="card">
-                <h3 style="margin-bottom: 10px; font-size: 1.1rem;">Depuración ✨</h3>
-                <p style="font-size: 0.8rem; opacity:0.6; margin-bottom: 15px;">Asegúrate de tener la última versión del diseño.</p>
-                <button class="btn" style="padding: 12px; font-size: 0.9rem;" onclick="location.reload(true)">
-                    🔄 Forzar Actualización
-                </button>
-            </div>
-
-            <div style="text-align: center; margin-top: 40px; opacity: 0.5;">
-                <p style="font-size: 0.8rem; font-weight: 600;">Agenda Studio v1.6 (Supabase-Stable)</p>
-                <p style="font-size: 0.7rem;">Hecho con ❤️ para tu negocio</p>
             </div>
         `;
     },
@@ -521,6 +637,101 @@ const app = {
 
         if (error) alert('Error al finalizar: ' + error.message);
         else this.loadData();
+    },
+
+    async deleteAppointment(id) {
+        if (!confirm('¿Estás segura de eliminar esta cita permanentemente?')) return;
+
+        const { error } = await supabaseClient
+            .from('appointments')
+            .delete()
+            .eq('id', id);
+
+        if (error) alert('Error al eliminar: ' + error.message);
+        else this.loadData();
+    },
+
+    showEditAppointment(id) {
+        const apt = this.state.appointments.find(a => a.id === id);
+        if (!apt) return;
+
+        const modal = document.getElementById('modal-container');
+        const modalContent = modal.querySelector('.modal-content');
+
+        modalContent.innerHTML = `
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h2 style="color: var(--secondary-vibrant); font-size: 1.6rem;">Editar Cita ✨</h2>
+                <p style="opacity:0.6; font-size: 0.9rem;">Modifica los detalles</p>
+            </div>
+            
+            <form id="edit-apt-form">
+                <div class="form-group">
+                    <label class="label-premium">Nombre del Cliente</label>
+                    <input type="text" id="edit-client-name" class="input-premium" value="${apt.client}" required>
+                </div>
+                <div class="form-group">
+                    <label class="label-premium">Tipo de Servicio</label>
+                    <select id="edit-service-select" class="input-premium">
+                        ${this.state.services.map(s => `
+                            <option value="${s.name}" ${s.name === apt.service ? 'selected' : ''}>
+                                ${s.name} ($${s.price.toLocaleString()})
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="label-premium">Día</label>
+                        <input type="date" id="edit-apt-date" class="input-premium" value="${apt.date}" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="label-premium">Hora</label>
+                        <input type="time" id="edit-apt-time" class="input-premium" value="${apt.time}" required>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 15px; margin-top: 30px;">
+                    <button type="button" class="btn btn-outline" style="flex:1" onclick="app.closeModal()">Cerrar</button>
+                    <button type="submit" class="btn" style="flex:2">Guardar cambios ✨</button>
+                </div>
+            </form>
+        `;
+
+        modal.classList.add('active');
+        modal.classList.remove('hidden');
+
+        document.getElementById('edit-apt-form').onsubmit = (e) => {
+            e.preventDefault();
+            this.updateAppointment(id);
+        };
+    },
+
+    async updateAppointment(id) {
+        const client = document.getElementById('edit-client-name').value;
+        const serviceName = document.getElementById('edit-service-select').value;
+        const date = document.getElementById('edit-apt-date').value;
+        const time = document.getElementById('edit-apt-time').value;
+        const service = this.state.services.find(s => s.name === serviceName);
+
+        const updates = {
+            client,
+            service: serviceName,
+            date,
+            time,
+            price: service.price // Update price in case service changed
+        };
+
+        const { error } = await supabaseClient
+            .from('appointments')
+            .update(updates)
+            .eq('id', id);
+
+        if (error) alert('Error al actualizar: ' + error.message);
+        else {
+            this.loadData();
+            this.closeModal();
+        }
     }
 };
 
