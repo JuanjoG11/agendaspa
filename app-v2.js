@@ -1,6 +1,6 @@
 
-const SUPABASE_URL = 'https://nvnbqoapevtntrrvuihd.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52bmJxb2FwZXZ0bnRycnZ1aWhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMDMyODYsImV4cCI6MjA4Njc3OTI4Nn0.2Z0JD53Wb80eWblln_J9QHVg5ty6FC6rZD_cO58TSaU';
+const SUPABASE_URL = 'https://ypqxygurmglwjowygpcl.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Rb1YMM3MtK8mjZjpL0ji0g_WDQfi3QI';
 // Renamed to supabaseClient to avoid conflict with the 'supabase' global variable from the SDK script
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
